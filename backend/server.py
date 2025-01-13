@@ -1,3 +1,5 @@
+"""Handle client updates from websockets and sends new state to clients."""
+
 import asyncio
 from websockets.server import serve
 
