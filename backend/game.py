@@ -4,7 +4,6 @@ import random
 
 from enum import Enum
 from dataclasses import dataclass
-from typing import Literal
 
 class Suit(Enum):
     CLUBS = "♣"
@@ -14,16 +13,16 @@ class Suit(Enum):
 
 
 class Rank(Enum):
-    ACE = "1"
-    TWO = "2"
-    THREE = "3"
-    FOUR = "4"
-    FIVE = "5"
-    SIX = "6"
-    SEVEN = "7"
-    EIGHT = "8"
-    NINE = "9"
-    TEN = "10"
+    ACE = 1
+    TWO = 2
+    THREE = 3
+    FOUR = 4
+    FIVE = 5
+    SIX = 6
+    SEVEN = 7
+    EIGHT = 8
+    NINE = 9
+    TEN = 10
     JACK = "J"
     QUEEN = "Q"
     KING = "K"
@@ -35,6 +34,28 @@ class Card:
     
     def __str__(self):
         return f"{self.rank.name} of {self.suit.name}"
+    
+    def can_be_point(self) -> bool:
+        # Ace, 2, 3, 4, 5, 6, 7, 8, 9, 10 can be played as point cards.
+        return self.rank not in [Rank.JACK, Rank.QUEEN, Rank.KING]
+    
+    def can_be_one_off(self) -> bool:
+        # Ace, 2, 3, 4, 5, 6, 7, 9 can be played as one-off effect cards.
+        return self.rank in [
+            Rank.ACE,
+            Rank.TWO,
+            Rank.THREE,
+            Rank.FOUR,
+            Rank.FIVE,
+            Rank.SIX,
+            Rank.SEVEN,
+            Rank.NINE,
+        ]
+    
+    def can_be_permanent(self) -> bool:
+        # 8, Jack, Queen, King can be played as permanent effect cards
+        return self.rank in [Rank.EIGHT, Rank.JACK, Rank.QUEEN, Rank.KING]
+
 
 def can_scuttle(card1: Card, card2: Card) -> bool:
     """Check if card1 can scuttle card2."""
@@ -42,16 +63,23 @@ def can_scuttle(card1: Card, card2: Card) -> bool:
     # if same value then can scuttle according to suit priority
     # clubs < diamonds < hearts < spades
 
-    if card1.rank.value > card2.rank.value:
+    if not card2.can_be_point():
+        return False
+    
+    if not card1.can_be_point():
+        return False
+
+    if card1.rank.value > card2.rank.value: # type: ignore
         return True
     if card1.rank.value == card2.rank.value:
         # todo: check if this works
         return card1.suit.value > card2.suit.value
+    
+    return False
 
 @dataclass
 class Hand:
     cards: set[Card]
-    value: int
     
     def add_card(self, card: Card):
         self.cards.add(card)
@@ -60,6 +88,9 @@ class Hand:
         self.cards.remove(card)
         return card
 
+    def __iter__(self):
+        return iter(self.cards)
+
 @dataclass
 class Player:
     hand: Hand = Hand(set())
@@ -67,15 +98,14 @@ class Player:
     effects: Hand = Hand(set())
     cur_points: int = 0
     win_con: int = 21
-    dealer: bool
 
 
 class Game:
     def __init__(self):
         # Initialize game state and set up game
         
-        self.dealer = Player(True)
-        self.player = Player(False)
+        self.dealer = Player()
+        self.player = Player()
 
         self.scrap = Hand(set())
         self.winner = None
@@ -87,11 +117,11 @@ class Game:
         # Deal cards
         for i in range(11):
             if i % 2 == 0:
-                # Dealer gets 6 cards
-                self.dealer.hand.add_card(self.deck.remove_card())
+                # Dealer gets 6 cards but they start second
+                self.dealer.hand.add_card(self.deck.pop())
             else:
                 # Player gets 5 cards
-                self.player.hand.add_card(self.deck.remove_card())
+                self.player.hand.add_card(self.deck.pop())
 
         # 3 consecutive passes ends the game with a draw
         self.consecutive_passes = 0
@@ -102,35 +132,146 @@ class Game:
         # The current player that holds priority
         self.priority: Player = self.current_player
         
-
+    def generate_legal_moves(self) -> list[str]:
+        """Generate all legal moves that the current player can take for the frontend to decide on."""
+        
+        moves = []
+        if len(self.deck) != 0:
+            moves.append("draw card")
+        else:
+            moves.append("pass turn")
+        
+        opponent = self.dealer if self.current_player == self.player else self.player
+        for card in self.current_player.hand:
+            if card.can_be_point():
+                moves.append(f"play {card} as point")
+                for opp_card in opponent.hand:
+                    if can_scuttle(card, opp_card):
+                        moves.append(f"scuttle {opp_card} with {card}")
+            
+            if card.can_be_one_off():
+                # seperate messages for each one off card
+                if card.rank == Rank.ACE:
+                    moves.append(f"scrap all cards with {card}")
+                if card.rank == Rank.TWO:
+                    for opp_perm in opponent.effects:
+                        moves.append(f"scuttle {opp_perm} with {card}")
+        
+        return moves
 
     def draw_card(self):
         """Draw a card from the deck."""
         self.consecutive_passes = 0
+        drawn_card = self.deck.pop()
+
+        print(f"[debug]: drew {drawn_card}")
+        self.player.hand.add_card(drawn_card)
         
         self.end_turn()
 
-    def resolve_point_card(self, card: Card, scuttle: bool, target: Card):
-        """Resolve the effect of a card."""
-        if card.rank in [Rank.EIGHT, Rank.JACK, Rank.QUEEN, Rank.KING]:
+    def check_scrap(self):
+        print(self.scrap)
+
+    def check_queen_prot(self):
+        opponent = self.dealer if self.current_player == self.player else self.player
+        queen_prot = False
+        for c in opponent.effects:
+            if c.rank is Rank.QUEEN:
+                queen_prot = True
+                break
+        return queen_prot
+
+    def resolve_point_card(self, card: Card, scuttle: bool, target: Card | None):
+        """Resolve the effect of a point card."""
+        if not card.can_be_point():
             print("Error: Card is not a point card.")
         if scuttle:
-            opponent = self.dealer if self.current_player == "player" else self.player
-            if can_scuttle(card, target):
-                opponent.cur_points += card.rank
-                self.scrap.add_card(opponent.points.remove_card(card))
+            opponent = self.dealer if self.current_player == self.player else self.player
+            if target is not None and can_scuttle(card, target):
+                if type(card.rank) is int:
+                    opponent.cur_points -= card.rank
+                    self.scrap.add_card(opponent.points.remove_card(card))
+                else:
+                    print("Error: Invalid card used for scuttling")
             else:
                 print("Error: Card cannot scuttle target.")
         else:
-            self.current_player.cur_points += card.rank
+            if type(card.rank) is int:
+                self.current_player.cur_points += card.rank
             self.current_player.points.add_card(card)
             if self.current_player.cur_points >= self.current_player.win_con:
-                self.winner = self.current_player
-                # todo: end_game()
+                self.end_game()
+        self.end_turn()
+
+    def resolve_effect_card(self, card: Card, target: Card, mode: int):
+        """
+        Resolve the effect of an one-off card.
+        mode is only applicable for 2's and 7's.
+        """
+        if not card.can_be_one_off():
+            print("Error: Card is not a one-off card.")
+        else:
+            opponent = self.dealer if self.current_player == self.player else self.player
+            match card.rank:
+                case Rank.ACE:
+                    for player in [self.current_player, opponent]:
+                        for c in player.points:
+                            self.scrap.add_card(c)
+                        player.points = Hand(set())
+                        player.cur_points = 0
+                case Rank.TWO:
+                    if target is None:
+                        print("Error: No target for card.")
+                    if mode == 0:
+                        if target.rank is not Rank.QUEEN and self.check_queen_prot():
+                            print("Error: Queen protection active.")
+                        else:
+                            self.scrap.add_card(opponent.effects.remove_card(target))
+                    if mode == 1:
+                        if target.rank is not Rank.QUEEN and self.check_queen_prot():
+                            print("Error: Queen protection active.")
+                        else:
+                            # todo: Block opponent's one-off
+                            self.scrap.add_card(target)
+                            pass
+                case Rank.THREE:
+                    if target is None:
+                        print("Error: No target for card.")
+                    self.current_player.hand.add_card(self.scrap.remove_card(target))
+                case Rank.FOUR:
+                    # Ask opponent to discard two cards
+                    # Show cards to player
+
+                    pass
+                case Rank.FIVE:
+                    for i in range(2):
+                        self.draw_card()
+                case Rank.SIX:
+                    for player in [self.current_player, opponent]:
+                        for c in player.effects:
+                            self.scrap.add_card(c)
+                        player.effects = Hand(set())
+                        # todo: Handle Jack and 8 leaving board effects
+                        # When kings leave, reset win condition
+                        player.win_con = 0
+                case Rank.SEVEN:
+                    drawn_card = self.deck.pop()
+                    # todo: Handle playing/discarding drawn card
+                    pass
+                case Rank.NINE:
+                    # Return permanent effect card to hand
+                    if target in self.current_player.effects:
+                        self.current_player.hand.add_card(self.current_player.effects.remove_card(target))
+                    elif target in opponent.effects:
+                        opponent.hand.add_card(opponent.effects.remove_card(target))
+                    else:
+                        print("Error: Target not found in play.")
+            if self.current_player.cur_points >= self.current_player.win_con:
+                self.end_game()
         self.end_turn()
 
 
-    def play_point_card(self, card: Card, one_off):
+    def play_point_card(self, card: Card):
         """Play a point card from current player's hand."""
         self.consecutive_passes = 0
         
@@ -139,7 +280,9 @@ class Game:
 
         # Remove card from player's hand
         self.current_player.hand.remove_card(card)
-        self.resolve_point_card(card)
+
+        self.priority = self.dealer if self.current_player == self.player else self.player
+        self.resolve_point_card(card, False, None)
         
     def pass_turn(self):
         self.consecutive_passes += 1
@@ -147,5 +290,20 @@ class Game:
 
     def end_turn(self):
         """End your turn and give control to the other player."""
+        if self.consecutive_passes >= 3:
+            self.end_game()
         self.current_player = self.dealer if self.current_player == self.player else self.player
         self.priority = self.current_player
+
+    def end_game(self):
+        """Resolve the end of the game"""
+        if self.consecutive_passes >= 3:
+            print(f"{self.consecutive_passes} passes in a row. Game ends in draw")
+
+        if self.player.cur_points >= self.player.win_con:
+            print("Player 1 wins")
+        
+        if self.dealer.cur_points >= self.dealer.win_con:
+            print("Player 2 wins")
+
+        print("error inconclusive winner or draw but game ended.")
