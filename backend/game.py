@@ -31,6 +31,7 @@ class Card:
     def __init__(self, rank: Rank, suit: Suit):
         self.rank = rank
         self.suit = suit
+        self.jacks = 0
     
     def __str__(self):
         return f"{self.rank.name} of {self.suit.name}"
@@ -98,6 +99,7 @@ class Player:
     effects: Hand = Hand(set())
     cur_points: int = 0
     win_con: int = 21
+    hand_visible: bool = False
 
 
 class Game:
@@ -131,6 +133,18 @@ class Game:
 
         # The current player that holds priority
         self.priority: Player = self.current_player
+
+        def jacked(self, target: Card):
+            aggressor = self.player if target in self.player.points else self.player
+            victim = self.dealer if target in self.player.points else self.player
+            aggressor.points.add_card(victim.points.remove_card(target))
+            target.jacks += 1
+
+        def unjacked(self, target: Card):
+            aggressor = self.player if target in self.player.points else self.player
+            opponent = self.dealer if target in self.current_player.points else self.player
+            opponent.points.add_card(aggressor.points.remove_card(target))
+            target.jacks -= 1
         
     def generate_legal_moves(self) -> list[str]:
         """Generate all legal moves that the current player can take for the frontend to decide on."""
@@ -247,13 +261,23 @@ class Game:
                     for i in range(2):
                         self.draw_card()
                 case Rank.SIX:
-                    for player in [self.current_player, opponent]:
-                        for c in player.effects:
+                    for p in [self.current_player, opponent]:
+                        for c in p.effects:
                             self.scrap.add_card(c)
-                        player.effects = Hand(set())
-                        # todo: Handle Jack and 8 leaving board effects
+                        p.effects = Hand(set())
+                        # todo: Handle Jack leaving board effects
+                        # When 8s leave, set hand visibility to false
+                        p.hand_visible = False
+                        # When jacks leave, return all cards to owner's board
+                        for c in p.points:
+                            if c.jacks > 0:
+                                if c.jacks % 2 == 1:
+                                    controller = self.current_player if c in opponent.points else opponent
+                                    controller.points.add_card(p.points.remove_card(c))
+                                c.jacks = 0
                         # When kings leave, reset win condition
-                        player.win_con = 0
+                        p.win_con = 0
+                        self.scrap.add_card(p.points.remove_card(c))
                 case Rank.SEVEN:
                     drawn_card = self.deck.pop()
                     # todo: Handle playing/discarding drawn card
