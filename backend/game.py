@@ -146,20 +146,21 @@ class Game:
             opponent.points.add_card(aggressor.points.remove_card(target))
             target.jacks -= 1
         
-    def generate_legal_moves(self) -> list[str]:
+    def generate_legal_moves(self, hand: Hand, temp_draw: bool) -> list[str]:
         """Generate all legal moves that the current player can take for the frontend to decide on."""
         
         moves = []
-        if len(self.deck) != 0:
-            moves.append("draw card")
-        else:
-            moves.append("pass turn")
+        if not temp_draw:
+            if len(self.deck) != 0:
+                moves.append("draw card")
+            else:
+                moves.append("pass turn")
         
         opponent = self.dealer if self.current_player == self.player else self.player
-        for card in self.current_player.hand:
+        for card in hand:
             if card.can_be_point():
                 moves.append(f"play {card} as point")
-                for opp_card in opponent.hand:
+                for opp_card in opponent.points:
                     if can_scuttle(card, opp_card):
                         moves.append(f"scuttle {opp_card} with {card}")
             
@@ -253,9 +254,10 @@ class Game:
                         print("Error: No target for card.")
                     self.current_player.hand.add_card(self.scrap.remove_card(target))
                 case Rank.FOUR:
-                    # Ask opponent to discard two cards
-                    # Show cards to player
-
+                    for i in range(2):
+                        # Opponent chooses two cards to discard
+                        self.scrap.add_card(opponent.hand.remove_card(card))
+                        # Optional: Notify current player of discarded card
                     pass
                 case Rank.FIVE:
                     for i in range(2):
@@ -275,13 +277,26 @@ class Game:
                                     controller = self.current_player if c in opponent.points else opponent
                                     controller.points.add_card(p.points.remove_card(c))
                                 c.jacks = 0
-                        # When kings leave, reset win condition
-                        p.win_con = 0
-                        self.scrap.add_card(p.points.remove_card(c))
+                            # When kings leave, reset win condition
+                            p.win_con = 0
+                            self.scrap.add_card(p.points.remove_card(c))
                 case Rank.SEVEN:
-                    drawn_card = self.deck.pop()
-                    # todo: Handle playing/discarding drawn card
-                    pass
+                    temp_hand = Hand(set())
+                    temp_hand.add_card(self.deck.pop())
+                    moves = self.generate_legal_moves(temp_hand, True)
+                    if not moves:
+                        self.scrap.add_card(temp_hand.cards.pop())
+                    else:
+                        # Ask user if card is played as point or one-off
+                        if mode == 0:
+                            # Ask user to designate target for scuttling
+                            # target = user_input
+                            self.resolve_point_card(temp_hand.cards.pop(), False, None)
+                        if mode == 1:
+                            # Ask user to designate target
+                            # target = user_input
+                            # self.resolve_effect_card(temp_hand.cards.pop(), None, 0)
+                            pass
                 case Rank.NINE:
                     # Return permanent effect card to hand
                     if target in self.current_player.effects:
