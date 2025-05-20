@@ -6,4 +6,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "websockets>=14.1",
+    "fastapi",
+    "uvicorn[standard]",
 ]
+
+[project.group.dev.dependencies]
+httpx = "*"
