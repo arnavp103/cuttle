@@ -134,17 +134,17 @@ class Game:
         # The current player that holds priority
         self.priority: Player = self.current_player
 
-        def jacked(self, target: Card):
-            aggressor = self.player if target in self.player.points else self.player
-            victim = self.dealer if target in self.player.points else self.player
-            aggressor.points.add_card(victim.points.remove_card(target))
-            target.jacks += 1
+    def jacked(self, target: Card):
+        aggressor = self.player if target in self.player.points else self.player
+        victim = self.dealer if target in self.player.points else self.player
+        aggressor.points.add_card(victim.points.remove_card(target))
+        target.jacks += 1
 
-        def unjacked(self, target: Card):
-            aggressor = self.player if target in self.player.points else self.player
-            opponent = self.dealer if target in self.current_player.points else self.player
-            opponent.points.add_card(aggressor.points.remove_card(target))
-            target.jacks -= 1
+    def unjacked(self, target: Card):
+        aggressor = self.player if target in self.player.points else self.player
+        opponent = self.dealer if target in self.current_player.points else self.player
+        opponent.points.add_card(aggressor.points.remove_card(target))
+        target.jacks -= 1
         
     def generate_legal_moves(self, hand: Hand, temp_draw: bool) -> list[str]:
         """Generate all legal moves that the current player can take for the frontend to decide on."""
@@ -284,18 +284,22 @@ class Game:
                     temp_hand = Hand(set())
                     temp_hand.add_card(self.deck.pop())
                     moves = self.generate_legal_moves(temp_hand, True)
+                    mode_temp = 0  # 0 for point, 1 for effect
                     if not moves:
                         self.scrap.add_card(temp_hand.cards.pop())
                     else:
                         # Ask user if card is played as point or one-off
-                        if mode == 0:
-                            # Ask user to designate target for scuttling
-                            # target = user_input
-                            self.resolve_point_card(temp_hand.cards.pop(), False, None)
-                        if mode == 1:
+                        if mode_temp == 0:
+                            # Ask user to designate target if scuttling
+                            # temp_target = input
+                            # if temp_target is not None:
+                            #     self.resolve_point_card(temp_hand.cards.pop(), True, temp_target)
+                            # else:
+                                self.resolve_point_card(temp_hand.cards.pop(), False, None)
+                        if mode_temp == 1:
                             # Ask user to designate target
-                            # target = user_input
-                            # self.resolve_effect_card(temp_hand.cards.pop(), None, 0)
+                            # temp_target = input
+                            # self.resolve_effect_card(temp_hand.cards.pop(), temp_target, 0)
                             pass
                 case Rank.NINE:
                     # Return permanent effect card to hand
@@ -309,8 +313,24 @@ class Game:
                 self.end_game()
         self.end_turn()
 
+    def resolve_perm_card(self, card: Card, target: Card):
+        """Resolve the effect of a permanent card."""
+        if not card.can_be_permanent():
+            print("Error: Card is not a permanent card.")
+        else:
+            opponent = self.dealer if self.current_player == self.player else self.player
+            match card.rank:
+                case Rank.EIGHT:
+                    opponent.hand_visible = True
+                case Rank.JACK:
+                    self.jacked(target)
+                case Rank.KING:
+                    for c in self.current_player.effects:
+                        if 
+            self.current_player.effects.add_card(card)
 
-    def play_point_card(self, card: Card):
+
+    def play_point_card(self, card: Card, mode: int):
         """Play a point card from current player's hand."""
         self.consecutive_passes = 0
         
@@ -322,6 +342,34 @@ class Game:
 
         self.priority = self.dealer if self.current_player == self.player else self.player
         self.resolve_point_card(card, False, None)
+
+    def play_effect_card(self, card: Card, target: Card, mode: int):
+        """Play an effect card from current player's hand."""
+        self.consecutive_passes = 0
+        
+        if card not in self.current_player.hand:
+            print("Error: Card not in hand.")
+        if target not in self.dealer.points and target not in self.player.points:
+            print("Error: Target not in play.")
+
+        # Remove card from player's hand
+        self.current_player.hand.remove_card(card)
+
+        self.priority = self.dealer if self.current_player == self.player else self.player
+        # mode only applies to 2's
+        self.resolve_effect_card(card, target, mode)
+
+    def play_perm_card(self, card: Card, target: Card):
+        """Play a permanent effect card from current player's hand."""
+        self.consecutive_passes = 0
+        
+        if card not in self.current_player.hand:
+            print("Error: Card not in hand.")
+
+        # Remove card from player's hand
+        self.current_player.hand.remove_card(card)
+
+        self.priority = self.dealer if self.current_player == self.player else self.player
         
     def pass_turn(self):
         self.consecutive_passes += 1
