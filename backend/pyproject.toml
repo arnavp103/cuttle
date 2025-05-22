@@ -8,6 +8,7 @@ dependencies = [
     "websockets>=14.1",
     "fastapi",
     "uvicorn[standard]",
+    "psycopg2-binary",
 ]
 
 [project.group.dev.dependencies]
