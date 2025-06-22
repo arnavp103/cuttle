@@ -1,4 +1,4 @@
-import { useState, useImperativeHandle } from 'react';
+import { useState } from 'react';
 import { useDrop } from 'react-dnd'
 import type { CardProps } from './PlayingCard';
 import PlayingCard from './PlayingCard';
@@ -17,11 +17,17 @@ function BoardZone({ visible = false, onCardMoved, zoneId } : BoardZoneProps) {
     const [{ isOver, canDrop }, drop] = useDrop(() => ({
         accept: 'CARD',
         drop: (item: CardProps & { sourceZone?: string }) => {
-            // Only add if not from this zone
-            if (item.sourceZone !== zoneId) {
-                setCards((prevCards) => [...prevCards, { suit: item.suit, rank: item.rank }]);
-                console.log(`Dropped card: ${item.rank} of ${item.suit}`);
+            // If dropping into the same zone, cancel the pending removal
+            if (item.sourceZone === zoneId) {
+                return { droppedInSameZone: true };
             }
+            
+            // Add card to this zone if it's from a different zone
+            setCards((prevCards) => [...prevCards, { suit: item.suit, rank: item.rank }]);
+            console.log(`Dropped card: ${item.rank} of ${item.suit}`);
+            
+            // Clear pending removal since drop was successful
+            return { droppedSuccessfully: true };
         },
         collect: (monitor) => ({
             isOver: monitor.isOver(),
@@ -47,6 +53,25 @@ function BoardZone({ visible = false, onCardMoved, zoneId } : BoardZoneProps) {
         });
     };
 
+    // Function to mark a card for removal when dragging starts
+    // const handleDragStart = (cardToRemove: CardProps) => {
+    //     console.log(`Starting drag for card: ${cardToRemove.rank} of ${cardToRemove.suit}`);
+    //     // setPendingRemoval(cardToRemove);
+    //     removeCard(cardToRemove); // Immediately remove the card from this zone
+    // };
+
+    // Function to handle drag end - if there's still a pending removal, cancel it
+    const handleDragEnd = (card: CardProps, didDrop: boolean, dropResult: any) => {
+        if (didDrop && !dropResult?.droppedInSameZone) {
+            // Successfully dropped elsewhere, remove it from this zone
+            console.log(`Removed card: ${card.rank} of ${card.suit}`);
+            removeCard(card);
+        } else {
+            // Card was dropped in same zone or outside valid zone, keep it here
+            console.log(`Keeping card: ${card.rank} of ${card.suit}`);
+        }
+    };
+
     return (
         <div 
             ref={drop}
@@ -59,7 +84,7 @@ function BoardZone({ visible = false, onCardMoved, zoneId } : BoardZoneProps) {
                     rank={card.rank} 
                     revealed={visible}
                     sourceZone={zoneId}
-                    onDragStart={() => removeCard(card)} // Remove when drag starts
+                    onDragEnd={(didDrop: boolean, dropResult: any) => handleDragEnd(card, didDrop, dropResult)} // Remove when drag ends
                 />
             ))}
         </div>

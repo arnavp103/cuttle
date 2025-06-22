@@ -39,6 +39,7 @@ function Board() {
             <div className="temp">
                 <PlayingCard suit="hearts" rank="A" revealed={true} />
                 <PlayingCard suit="hearts" rank="J" revealed={true} />
+                <PlayingCard suit="spades" rank="Q" revealed={true} />
             </div>
         </DndProvider>
     )
