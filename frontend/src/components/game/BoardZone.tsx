@@ -6,28 +6,24 @@ import PlayingCard from './PlayingCard';
 // A place for cards to be dropped into on the board
 
 interface BoardZoneProps {
-    visible?: boolean;
+    owned?: boolean;
     onCardMoved?: (card: CardProps) => void; // Called when card leaves this zone
     zoneId?: string; // Unique identifier for this zone
 }
 
-function BoardZone({ visible = false, onCardMoved, zoneId } : BoardZoneProps) {
+function BoardZone({ owned = false, onCardMoved, zoneId } : BoardZoneProps) {
     const [cards, setCards] = useState<CardProps[]>([]);
 
     const [{ isOver, canDrop }, drop] = useDrop(() => ({
         accept: 'CARD',
+        canDrop: () => owned, // Only allow drop if owned is true
         drop: (item: CardProps & { sourceZone?: string }) => {
-            // If dropping into the same zone, cancel the pending removal
             if (item.sourceZone === zoneId) {
                 return { droppedInSameZone: true };
             }
-            
-            // Add card to this zone if it's from a different zone
             setCards((prevCards) => [...prevCards, { suit: item.suit, rank: item.rank }]);
             console.log(`Dropped card: ${item.rank} of ${item.suit}`);
-            
-            // Clear pending removal since drop was successful
-            return { droppedSuccessfully: true };
+            return { droppedSuccessfully: true, zoneId: zoneId };
         },
         collect: (monitor) => ({
             isOver: monitor.isOver(),
@@ -82,7 +78,7 @@ function BoardZone({ visible = false, onCardMoved, zoneId } : BoardZoneProps) {
                     key={`${card.suit}-${card.rank}`}
                     suit={card.suit} 
                     rank={card.rank} 
-                    revealed={visible}
+                    revealed={owned}
                     sourceZone={zoneId}
                     onDragEnd={(didDrop: boolean, dropResult: any) => handleDragEnd(card, didDrop, dropResult)} // Remove when drag ends
                 />

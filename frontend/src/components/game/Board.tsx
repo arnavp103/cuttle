@@ -21,11 +21,11 @@ function Board() {
                     </div>
                     {/* Player */}
                     <div className="flex flex-row h-full rounded-lg p-2">
-                        <BoardZone visible={true} zoneId='player-point'/>
-                        <BoardZone visible={true} zoneId='player-perm'/>
+                        <BoardZone owned={true} zoneId='player-point'/>
+                        <BoardZone owned={true} zoneId='player-perm'/>
                     </div>
                     {/* Hand */}
-                    <BoardZone visible={true} zoneId='player-hand'/>
+                    <BoardZone owned={true} zoneId='player-hand'/>
                 </div>  
                 {/* Draw and discard zones */}
                 <div className="flex flex-col w-48 h-full outline outline-offset-2 outline-color-cyan-500 rounded-lg mt-4 p-2"> 

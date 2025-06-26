@@ -35,7 +35,7 @@ function PlayingCard({ suit, rank, revealed, sourceZone, onDragEnd }: CardProps)
     // }, [isDragging]);
     
     return (
-        <div ref={drag} className="flex justify-center items-center h-44 w-32 bg-white border-2 rounded-lg text-black mx-2 py-2">
+        <div ref={drag} className="flex justify-center items-center h-44 w-32 bg-white border-2 rounded-lg text-black mx-1 py-2">
             {(revealed) ?  <img src={`./assets/${rank}_of_${suit}.png`} alt={`${rank} of ${suit}`} /> : <img src={`./assets/card-back.png`} alt="Card Back" />}
         </div>
     )
